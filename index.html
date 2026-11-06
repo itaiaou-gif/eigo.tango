@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>英単語帳アプリ</title>
+  <title>忘却曲線対応 英単語帳</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -23,30 +23,37 @@
       flex-direction: column;
       align-items: center;
     }
-    .progress-bar {
+    
+    /* 統計ダッシュボード */
+    .dashboard {
       width: 100%;
-      background: #e0e0e0;
-      border-radius: 10px;
-      height: 10px;
-      margin-bottom: 12px;
-      overflow: hidden;
-    }
-    .progress {
-      height: 100%;
-      background: #007aff;
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-    .status {
-      font-size: 14px;
-      color: #666;
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 12px 16px;
       margin-bottom: 16px;
-      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border: 1px solid #eef0f2;
     }
-    /* 3Dカードのアニメーション設定 */
+    .dash-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 6px;
+    }
+    .dash-row:last-child { margin-bottom: 0; }
+    .dash-title { font-weight: 700; color: #1a1a1a; }
+    .dash-value { font-weight: 700; color: #007aff; }
+    .level-breakdown {
+      font-size: 11px;
+      color: #8e8e93;
+      text-align: right;
+    }
+
     .card-container {
       width: 100%;
-      height: 240px;
+      height: 230px;
       perspective: 1000px;
       cursor: pointer;
     }
@@ -59,9 +66,7 @@
       border-radius: 16px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.08);
     }
-    .card.flipped {
-      transform: rotateY(180deg);
-    }
+    .card.flipped { transform: rotateY(180deg); }
     .card-face {
       position: absolute;
       width: 100%;
@@ -77,39 +82,22 @@
       background: #ffffff;
       border: 1px solid #eef0f2;
     }
-    .card-back {
-      transform: rotateY(180deg);
-      background: #f8fafd;
-    }
-    .word {
-      font-size: 32px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-    }
-    .meaning {
-      font-size: 24px;
-      font-weight: 700;
-      color: #007aff;
-      margin-bottom: 12px;
-    }
-    .hint {
-      font-size: 13px;
-      color: #8e8e93;
-      line-height: 1.4;
-    }
-    .tap-info {
+    .card-back { transform: rotateY(180deg); background: #f8fafd; }
+    .word { font-size: 32px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .meaning { font-size: 22px; font-weight: 700; color: #007aff; margin-bottom: 8px; }
+    .hint { font-size: 13px; color: #8e8e93; line-height: 1.4; }
+    .badge {
       position: absolute;
-      bottom: 12px;
+      top: 12px;
+      right: 12px;
       font-size: 11px;
-      color: #c7c7cc;
+      background: #e5e5ea;
+      padding: 4px 8px;
+      border-radius: 12px;
+      color: #555;
     }
-    .controls {
-      display: flex;
-      gap: 12px;
-      width: 100%;
-      margin-top: 24px;
-    }
+    .tap-info { position: absolute; bottom: 12px; font-size: 11px; color: #c7c7cc; }
+    .controls { display: flex; gap: 12px; width: 100%; margin-top: 20px; }
     button {
       flex: 1;
       padding: 14px;
@@ -123,11 +111,50 @@
     button:active { transform: scale(0.98); }
     .btn-review { background: #ff9500; color: white; }
     .btn-master { background: #34c759; color: white; }
+
+    /* AI音声エリア */
+    .ai-section {
+      width: 100%;
+      margin-top: 20px;
+      background: #fff;
+      padding: 16px;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+    .ai-btn {
+      background: #5856d6;
+      color: white;
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .ai-btn.listening {
+      background: #ff3b30;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+    .ai-transcript {
+      font-size: 12px;
+      color: #666;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
     .btn-reset {
-      margin-top: 16px;
+      margin-top: 20px;
       background: transparent;
       color: #8e8e93;
-      font-size: 13px;
+      font-size: 12px;
       text-decoration: underline;
     }
   </style>
@@ -135,74 +162,122 @@
 <body>
 
 <div class="container">
-  <div class="progress-bar"><div class="progress" id="progress"></div></div>
-  <div class="status" id="status">1 / 10</div>
+  <!-- 統計ダッシュボード -->
+  <div class="dashboard">
+    <div class="dash-row">
+      <span class="dash-title">今日の復習対象</span>
+      <span class="dash-value" id="due-count">0 個</span>
+    </div>
+    <div class="dash-row">
+      <span class="dash-title">定着済みの単語数</span>
+      <span class="dash-value" id="mastered-count" style="color:#34c759;">0 / 0 個</span>
+    </div>
+    <div class="level-breakdown" id="level-breakdown">
+      Lv.1: 0 | Lv.2: 0 | Lv.3(完了): 0
+    </div>
+  </div>
 
   <div class="card-container" onclick="flipCard()">
     <div class="card" id="card">
       <div class="card-face card-front">
+        <div class="badge" id="level-badge">Lv.0</div>
         <div class="word" id="front-word">context</div>
         <div class="tap-info">タップして裏返す</div>
       </div>
       <div class="card-face card-back">
         <div class="meaning" id="back-meaning">文脈、背景、状況</div>
-        <div class="hint" id="back-hint">historical context（歴史的背景）などの形でよく使われます。</div>
+        <div class="hint" id="back-hint">historical context</div>
       </div>
     </div>
   </div>
 
   <div class="controls">
-    <button class="btn-review" onclick="markWord(false)">要復習 ✕</button>
-    <button class="btn-master" onclick="markWord(true)">覚えた ◯</button>
+    <button class="btn-review" onclick="markWord(false)">忘れた ✕<br><span style="font-size:10px;">(Lv.0にリセット)</span></button>
+    <button class="btn-master" onclick="markWord(true)">覚えた ◯<br><span style="font-size:10px;" id="next-review-info">(1日後に復習)</span></button>
   </div>
 
-  <button class="btn-reset" onclick="resetProgress()">学習記録をリセット</button>
+  <!-- AI音声コントロール -->
+  <div class="ai-section">
+    <button class="ai-btn" id="aiBtn" onclick="toggleVoiceInput()">
+      🎙️ AIマイクで単語を追加する
+    </button>
+    <div class="ai-transcript" id="aiTranscript">例: 「essential, 不可不可欠な, を追加して」</div>
+  </div>
+
+  <button class="btn-reset" onclick="resetProgress()">すべての学習記録をリセット</button>
 </div>
 
 <script>
-  const words = [
-    { id: 1, word: "context", meaning: "文脈、背景、状況", hint: "historical context（歴史的背景）" },
-    { id: 2, word: "democracy", meaning: "民主主義、民主政治", hint: "形容詞形は democratic（民主的な）" },
-    { id: 3, word: "witness", meaning: "目撃者、証人 / 目撃する", hint: "a key witness（重要証人）" },
-    { id: 4, word: "equivalent", meaning: "同等のもの / 同等の", hint: "be equivalent to ~（〜と同等である）" },
-    { id: 5, word: "faculty", meaning: "学部、教授陣、（身体・精神の）能力", hint: "多義語！「大学の学部」と「人間が持つ能力」" },
-    { id: 6, word: "load", meaning: "荷物、負担 / 荷を積む", hint: "a heavy load（重い荷物・大きな負担）" },
-    { id: 7, word: "strain", meaning: "緊張、負担、疲労", hint: "under a lot of strain（大きなストレスを受けて）" },
-    { id: 8, word: "vessel", meaning: "（大型の）船、血管、容器", hint: "blood vessel（血管）や大きな「船」" },
-    { id: 9, word: "acquaintance", meaning: "知人、面識、知識", hint: "親しい友人（friend）ではなく「顔見知りの人」" },
-    { id: 10, word: "parallel", meaning: "類似物、平行線 / 平行の", hint: "平行していることや共通・酷似しているもの" }
+  // 間隔の設定（ミリ秒換算）: Lv1=1日、Lv2=3日、Lv3=7日
+  const INTERVALS = [
+    0,                      // Lv0: 今すぐ
+    1 * 24 * 60 * 60 * 1000,// Lv1: 1日後
+    3 * 24 * 60 * 60 * 1000,// Lv2: 3日後
+    7 * 24 * 60 * 60 * 1000 // Lv3: 7日後
   ];
 
+  // 単語データ
+  let words = JSON.parse(localStorage.getItem('spaced_words') || JSON.stringify([
+    { id: 1, word: "context", meaning: "文脈、背景、状況", hint: "historical context", level: 0, nextReview: 0 },
+    { id: 2, word: "democracy", meaning: "民主主義、民主政治", hint: "形容詞形 democratic", level: 0, nextReview: 0 },
+    { id: 3, word: "witness", meaning: "目撃者、証人 / 目撃する", hint: "a key witness", level: 0, nextReview: 0 },
+    { id: 4, word: "equivalent", meaning: "同等のもの / 同等の", hint: "be equivalent to ~", level: 0, nextReview: 0 },
+    { id: 5, word: "faculty", meaning: "学部、教授陣、能力", hint: "多義語注意！", level: 0, nextReview: 0 },
+    { id: 6, word: "load", meaning: "荷物、負担 / 荷を積む", hint: "a heavy load", level: 0, nextReview: 0 },
+    { id: 7, word: "strain", meaning: "緊張、負担、疲労", hint: "under a lot of strain", level: 0, nextReview: 0 },
+    { id: 8, word: "vessel", meaning: "船、血管、容器", hint: "blood vessel", level: 0, nextReview: 0 },
+    { id: 9, word: "acquaintance", meaning: "知人、面識", hint: "friendではなく知人", level: 0, nextReview: 0 },
+    { id: 10, word: "parallel", meaning: "類似物、平行 / 平行の", hint: "共通・酷似", level: 0, nextReview: 0 }
+  ]));
+
+  let dueWords = [];
   let currentIndex = 0;
   let isFlipped = false;
-  let mastered = JSON.parse(localStorage.getItem('mastered_words') || '[]');
+
+  function getDueWords() {
+    const now = Date.now();
+    return words.filter(w => w.nextReview <= now);
+  }
+
+  function updateDashboard() {
+    const total = words.length;
+    const mastered = words.filter(w => w.level > 0).length;
+    const lv1 = words.filter(w => w.level === 1).length;
+    const lv2 = words.filter(w => w.level === 2).length;
+    const lv3 = words.filter(w => w.level === 3).length;
+
+    document.getElementById('due-count').innerText = `${dueWords.length} 個`;
+    document.getElementById('mastered-count').innerText = `${mastered} / ${total} 個 (${Math.round((mastered/total)*100 || 0)}%)`;
+    document.getElementById('level-breakdown').innerText = `Lv.1: ${lv1}個 | Lv.2: ${lv2}個 | Lv.3(完全定着): ${lv3}個`;
+  }
 
   function updateCard() {
     isFlipped = false;
     document.getElementById('card').classList.remove('flipped');
     
-    // まだ覚えていない単語を抽出
-    const unmastered = words.filter(w => !mastered.includes(w.id));
+    dueWords = getDueWords();
+    updateDashboard();
 
-    if (unmastered.length === 0) {
-      document.getElementById('front-word').innerText = "全単語マスター！🎉";
-      document.getElementById('back-meaning').innerText = "お疲れ様でした！";
-      document.getElementById('back-hint').innerText = "リセットボタンで最初から復習できます。";
-      document.getElementById('status').innerText = `${words.length} / ${words.length}`;
-      document.getElementById('progress').style.width = "100%";
+    if (dueWords.length === 0) {
+      document.getElementById('front-word').innerText = "今日の復習完了！🎉";
+      document.getElementById('back-meaning').innerText = "また明日復習しましょう！";
+      document.getElementById('back-hint').innerText = "忘却曲線に沿って出題されます。";
+      document.getElementById('level-badge').innerText = "COMPLETE";
+      document.getElementById('next-review-info').innerText = "";
       return;
     }
 
-    if (currentIndex >= unmastered.length) currentIndex = 0;
+    if (currentIndex >= dueWords.length) currentIndex = 0;
 
-    const current = unmastered[currentIndex];
+    const current = dueWords[currentIndex];
     document.getElementById('front-word').innerText = current.word;
     document.getElementById('back-meaning').innerText = current.meaning;
-    document.getElementById('back-hint').innerText = current.hint;
+    document.getElementById('back-hint').innerText = current.hint || "";
+    document.getElementById('level-badge').innerText = `Lv.${current.level}`;
 
-    const completed = words.length - unmastered.length;
-    document.getElementById('status').innerText = `${completed + 1} / ${words.length}`;
-    document.getElementById('progress').style.width = `${(completed / words.length) * 100}%`;
+    const nextLv = Math.min(current.level + 1, 3);
+    const nextDays = [0, 1, 3, 7][nextLv];
+    document.getElementById('next-review-info').innerText = `(${nextDays}日後に復習)`;
   }
 
   function flipCard() {
@@ -211,23 +286,92 @@
   }
 
   function markWord(isMastered) {
-    const unmastered = words.filter(w => !mastered.includes(w.id));
-    if (unmastered.length === 0) return;
+    if (dueWords.length === 0) return;
 
-    const current = unmastered[currentIndex];
+    const current = dueWords[currentIndex];
+    const targetWord = words.find(w => w.id === current.id);
+
     if (isMastered) {
-      mastered.push(current.id);
-      localStorage.setItem('mastered_words', JSON.stringify(mastered));
+      targetWord.level = Math.min(targetWord.level + 1, 3);
+      const daysInMs = INTERVALS[targetWord.level];
+      targetWord.nextReview = Date.now() + daysInMs;
     } else {
-      currentIndex = (currentIndex + 1) % unmastered.length;
+      targetWord.level = 0;
+      targetWord.nextReview = Date.now();
+      currentIndex = (currentIndex + 1) % dueWords.length;
     }
+
+    localStorage.setItem('spaced_words', JSON.stringify(words));
     updateCard();
   }
 
+  // AI音声入力機能
+  let recognition = null;
+  function toggleVoiceInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("お使いのブラウザは音声認識に対応していません");
+      return;
+    }
+
+    if (!recognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        document.getElementById('aiBtn').classList.add('listening');
+        document.getElementById('aiBtn').innerText = "🎙️ 聞き取り中...話してください";
+      };
+
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        document.getElementById('aiTranscript').innerText = `聞き取り: 「${text}」`;
+        parseAndAddWord(text);
+      };
+
+      recognition.onerror = () => resetAiButton();
+      recognition.onend = () => resetAiButton();
+    }
+
+    recognition.start();
+  }
+
+  function resetAiButton() {
+    document.getElementById('aiBtn').classList.remove('listening');
+    document.getElementById('aiBtn').innerText = "🎙️ AIマイクで単語を追加する";
+  }
+
+  function parseAndAddWord(text) {
+    const cleaned = text.replace(/を追加して|入れて|登録して|単語/g, '').trim();
+    const parts = cleaned.split(/[,、\s]+/);
+
+    if (parts.length >= 2) {
+      const newWord = {
+        id: Date.now(),
+        word: parts[0],
+        meaning: parts[1],
+        hint: parts[2] || "音声追加",
+        level: 0,
+        nextReview: 0
+      };
+
+      words.push(newWord);
+      localStorage.setItem('spaced_words', JSON.stringify(words));
+      document.getElementById('aiTranscript').innerText = `✨ 追加成功: ${parts[0]} (${parts[1]})`;
+      updateCard();
+    } else {
+      document.getElementById('aiTranscript').innerText = `⚠️ 「英単語, 意味」で話してください`;
+    }
+  }
+
   function resetProgress() {
-    if (confirm("学習記録をリセットして全単語を復習しますか？")) {
-      mastered = [];
-      localStorage.removeItem('mastered_words');
+    if (confirm("全単語の学習レベルと復習スケジュールをリセットしますか？")) {
+      words.forEach(w => {
+        w.level = 0;
+        w.nextReview = 0;
+      });
+      localStorage.setItem('spaced_words', JSON.stringify(words));
       currentIndex = 0;
       updateCard();
     }
